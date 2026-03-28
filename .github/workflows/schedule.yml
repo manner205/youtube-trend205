@@ -2,9 +2,9 @@ name: 스케줄 자동 발송
 
 on:
   schedule:
-    # 매 시간 정각과 30분에 실행 (UTC 기준)
+    # 3시간마다 실행 (UTC 기준)
     # 한국 시간 = UTC+9 이므로 한국 오후 8시 = UTC 11시
-    - cron: '0,30 * * * *'
+    - cron: '0 */3 * * *'
   workflow_dispatch:  # GitHub에서 수동 실행 가능
 
 jobs:
@@ -77,7 +77,7 @@ jobs:
           diff_min = abs((now - sched_dt).total_seconds()) / 60
 
           print(f"예정 시각과 차이: {diff_min:.1f}분")
-          if diff_min > 14:
+          if diff_min > 89:
               print("발송 시간 아님 — 종료")
               sys.exit(0)
 
