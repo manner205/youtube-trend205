@@ -4,44 +4,15 @@ Tool: scheduler.py
 설정 파일: data/schedule_config.json
 """
 
-import json
 import logging
-import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from tools.notion_schedule import load_config, save_config
 
 logger = logging.getLogger(__name__)
 
-SCHEDULE_CONFIG_FILE = "data/schedule_config.json"
-
-DEFAULT_CONFIG = {
-    "enabled": False,
-    "days": ["sun"],
-    "time": "20:00",
-    "frequency": "weekly",
-    "topics": ["수익형 브랜드", "콘텐츠 수익화", "1인 사업 런칭"],
-}
-
 _scheduler = BackgroundScheduler(timezone="Asia/Seoul")
-
-
-# ── 설정 파일 ─────────────────────────────────────────────────────────────────
-
-def load_config() -> dict:
-    if os.path.exists(SCHEDULE_CONFIG_FILE):
-        try:
-            with open(SCHEDULE_CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return DEFAULT_CONFIG.copy()
-
-
-def save_config(config: dict):
-    os.makedirs("data", exist_ok=True)
-    with open(SCHEDULE_CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
 
 
 # ── 스케줄 실행 함수 ──────────────────────────────────────────────────────────

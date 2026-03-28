@@ -153,27 +153,13 @@ async def progress_stream(run_id: str):
 
 # ── 스케줄 API ────────────────────────────────────────────────────────────────
 
-SCHEDULE_CONFIG_FILE = "data/schedule_config.json"
-
-DEFAULT_SCHEDULE = {
-    "enabled": False,
-    "days": ["sun"],
-    "time": "20:00",
-    "frequency": "weekly",
-    "topics": ["수익형 브랜드", "콘텐츠 수익화", "1인 사업 런칭"],
-}
-
-
 @app.get("/api/schedule")
 async def get_schedule():
-    if os.path.exists(SCHEDULE_CONFIG_FILE):
-        with open(SCHEDULE_CONFIG_FILE, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        # 다음 실행 시간 추가
-        from tools.scheduler import get_next_run
-        config["next_run"] = get_next_run()
-        return config
-    return {**DEFAULT_SCHEDULE, "next_run": ""}
+    from tools.notion_schedule import load_config
+    from tools.scheduler import get_next_run
+    config = load_config()
+    config["next_run"] = get_next_run()
+    return config
 
 
 @app.post("/api/schedule")
