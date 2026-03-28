@@ -1,8 +1,8 @@
 """
 Tool: youtube_collector.py
-역할: YouTube Data API v3로 분야별 탑 채널 및 인기 영상 수집
-입력: 없음 (NICHES 상수 사용)
-출력: dict (분야별 채널 + 영상 데이터)
+역할: YouTube Data API v3로 동적 주제별 탑 채널 및 인기 영상 수집
+입력: topics (list[str]) — 예: ["수익형 브랜드", "AI 부업"]
+출력: dict (주제별 채널 + 영상 데이터)
 """
 
 import os
@@ -17,26 +17,10 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# ── 분석 분야 정의 ────────────────────────────────────────────────────────────
-NICHES = {
-    "수익형_브랜드": {
-        "name": "수익형 브랜드",
-        "keywords_ko": ["수익형 브랜드", "퍼스널 브랜딩 수익화", "브랜드 마케팅"],
-        "keywords_en": ["profitable personal brand", "brand monetization"],
-    },
-    "콘텐츠_수익화": {
-        "name": "콘텐츠 수익화",
-        "keywords_ko": ["콘텐츠 수익화", "유튜브 수익화 방법", "크리에이터 수익"],
-        "keywords_en": ["content monetization youtube", "creator economy"],
-    },
-    "1인_사업_런칭": {
-        "name": "1인 사업 런칭",
-        "keywords_ko": ["1인 창업", "1인 사업 런칭", "소자본 창업"],
-        "keywords_en": ["solopreneur business", "one person business launch"],
-    },
-}
-
 CHANNEL_CACHE_FILE = "data/channel_cache.json"
+
+# 기본 주제 (웹에서 입력 없을 때 fallback)
+DEFAULT_TOPICS = ["수익형 브랜드", "콘텐츠 수익화", "1인 사업 런칭"]
 
 
 # ── 클라이언트 초기화 ─────────────────────────────────────────────────────────
@@ -46,6 +30,24 @@ def get_youtube_client():
     if not api_key:
         raise ValueError("YOUTUBE_API_KEY가 .env 파일에 없어.")
     return build("youtube", "v3", developerKey=api_key)
+
+
+# ── 동적 NICHES 생성 ──────────────────────────────────────────────────────────
+
+def _build_niches(topics: list) -> dict:
+    """
+    사용자 입력 주제 리스트로 NICHES 딕셔너리 생성.
+    키워드: 한국어 3개 (주제, 주제+방법, 주제+전략)
+    """
+    niches = {}
+    for topic in topics:
+        key = topic.strip().replace(" ", "_")
+        niches[key] = {
+            "name": topic.strip(),
+            "keywords_ko": [topic, f"{topic} 방법", f"{topic} 전략"],
+            "keywords_en": [topic],
+        }
+    return niches
 
 
 # ── 채널 검색 (100 유닛/호출) ─────────────────────────────────────────────────
@@ -70,7 +72,7 @@ def search_channels(youtube, keyword, region_code="KR", language="ko", max_resul
         return []
 
 
-# ── 채널 통계 조회 (1 유닛/호출, 최대 50개) ──────────────────────────────────
+# ── 채널 통계 조회 (1 유닛/호출) ──────────────────────────────────────────────
 
 def get_channel_stats(youtube, channel_ids):
     if not channel_ids:
@@ -134,7 +136,7 @@ def get_playlist_video_ids(youtube, playlist_id, max_results=15):
         return []
 
 
-# ── 영상 상세 정보 (1 유닛/호출, 최대 50개) ──────────────────────────────────
+# ── 영상 상세 정보 (1 유닛/호출) ──────────────────────────────────────────────
 
 def get_video_details(youtube, video_ids):
     if not video_ids:
@@ -202,15 +204,24 @@ def save_channel_cache(cache):
 
 # ── 메인 수집 함수 ────────────────────────────────────────────────────────────
 
-def collect_all_data():
+def collect_all_data(topics=None, cost_tracker=None):
     """
-    전체 3개 분야 데이터 수집.
+    주제별 YouTube 데이터 수집.
+
+    topics: list[str] — 분석할 주제 목록. None이면 DEFAULT_TOPICS 사용.
+    cost_tracker: CostTracker 인스턴스 (선택)
+
     반환값: {
         "collected_at": str,
         "week": str,
+        "topics": list[str],
         "niches": { niche_key: { "name", "channels", "videos" } }
     }
     """
+    if not topics:
+        topics = DEFAULT_TOPICS
+
+    niches = _build_niches(topics)
     youtube = get_youtube_client()
     channel_cache = load_channel_cache()
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
@@ -218,10 +229,11 @@ def collect_all_data():
     result = {
         "collected_at": datetime.now().isoformat(),
         "week": datetime.now().strftime("%Y-W%V"),
+        "topics": topics,
         "niches": {},
     }
 
-    for niche_key, niche_info in NICHES.items():
+    for niche_key, niche_info in niches.items():
         logger.info(f"[{niche_info['name']}] 수집 시작")
         niche_data = {"name": niche_info["name"], "channels": [], "videos": []}
 
@@ -232,24 +244,28 @@ def collect_all_data():
         else:
             channel_ids = []
 
-            # 한국어 검색
             for kw in niche_info["keywords_ko"]:
                 found = search_channels(youtube, kw, region_code="KR", language="ko", max_results=3)
                 channel_ids += [c["channel_id"] for c in found]
+                if cost_tracker:
+                    cost_tracker.add_yt_search()
 
-            # 한국 채널 부족 시 영어 보완
             if len(set(channel_ids)) < 5:
                 logger.info("  한국 채널 부족 → 영어권 채널 보완")
                 for kw in niche_info["keywords_en"]:
                     found = search_channels(youtube, kw, region_code="US", language="en", max_results=3)
                     channel_ids += [c["channel_id"] for c in found]
+                    if cost_tracker:
+                        cost_tracker.add_yt_search()
 
-            channel_ids = list(dict.fromkeys(channel_ids))  # 중복 제거, 순서 유지
+            channel_ids = list(dict.fromkeys(channel_ids))
             channel_cache[niche_key] = channel_ids
             save_channel_cache(channel_cache)
 
         # 채널 통계 → 구독자 수 기준 상위 5개
         stats = get_channel_stats(youtube, channel_ids)
+        if cost_tracker:
+            cost_tracker.add_yt_channels()
         top_channels = sorted(stats.values(), key=lambda x: x["subscriber_count"], reverse=True)[:5]
         niche_data["channels"] = top_channels
 
@@ -257,9 +273,13 @@ def collect_all_data():
         all_video_ids = []
         for ch in top_channels[:3]:
             playlist_id = get_uploads_playlist_id(youtube, ch["channel_id"])
+            if cost_tracker:
+                cost_tracker.add_yt_channels()  # contentDetails 조회
             if not playlist_id:
                 continue
             recent = get_playlist_video_ids(youtube, playlist_id, max_results=15)
+            if cost_tracker:
+                cost_tracker.add_yt_playlist()
             for v in recent:
                 pub = datetime.fromisoformat(v["published_at"].replace("Z", "+00:00"))
                 if pub >= cutoff:
@@ -268,6 +288,8 @@ def collect_all_data():
         # 영상 상세 정보 → 조회수 기준 상위 20개
         if all_video_ids:
             details = get_video_details(youtube, list(dict.fromkeys(all_video_ids)))
+            if cost_tracker:
+                cost_tracker.add_yt_videos()
             details.sort(key=lambda x: x["view_count"], reverse=True)
             niche_data["videos"] = details[:20]
 

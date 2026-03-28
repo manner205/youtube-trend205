@@ -7,6 +7,7 @@ Tool: gmail_sender.py
 
 import os
 import base64
+import json
 import logging
 from email.message import EmailMessage
 from datetime import datetime
@@ -25,8 +26,31 @@ TOKEN_FILE = "token.json"
 CREDENTIALS_FILE = "credentials.json"
 
 
+def _ensure_credential_files():
+    """
+    클라우드 환경: 환경변수에서 인증 파일 복원.
+    로컬 환경: 파일이 이미 있으면 그대로 사용.
+    """
+    # credentials.json 복원
+    if not os.path.exists(CREDENTIALS_FILE):
+        creds_env = os.getenv("GMAIL_CREDENTIALS_JSON")
+        if creds_env:
+            with open(CREDENTIALS_FILE, "w") as f:
+                f.write(creds_env)
+            logger.info("credentials.json 환경변수에서 복원 완료")
+
+    # token.json 복원
+    if not os.path.exists(TOKEN_FILE):
+        token_env = os.getenv("GMAIL_TOKEN_JSON")
+        if token_env:
+            with open(TOKEN_FILE, "w") as f:
+                f.write(token_env)
+            logger.info("token.json 환경변수에서 복원 완료")
+
+
 def _get_gmail_service():
     """Gmail API 클라이언트 반환 (OAuth 2.0 자동 갱신)"""
+    _ensure_credential_files()
     creds = None
 
     if os.path.exists(TOKEN_FILE):

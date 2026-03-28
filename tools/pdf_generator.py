@@ -1,7 +1,7 @@
 """
 Tool: pdf_generator.py
 역할: 수집 데이터 + Claude 분석 결과로 한국어 PDF 리포트 생성
-입력: all_data (dict), analysis (dict)
+입력: all_data (dict), analysis (dict), cost_summary (dict, 선택)
 출력: PDF 파일 경로 (str)
 """
 
@@ -17,9 +17,13 @@ from fpdf import FPDF
 
 logger = logging.getLogger(__name__)
 
-# Windows 한국어 폰트 경로
-_FONT_REGULAR = r"C:\Windows\Fonts\malgun.ttf"
-_FONT_BOLD = r"C:\Windows\Fonts\malgunbd.ttf"
+# 폰트 경로 — 프로젝트 내 assets 우선, 없으면 Windows 시스템 폰트 fallback
+import pathlib
+_ASSETS = pathlib.Path(__file__).parent.parent / "assets"
+_FONT_REGULAR = str(_ASSETS / "malgun.ttf") if (_ASSETS / "malgun.ttf").exists() \
+    else r"C:\Windows\Fonts\malgun.ttf"
+_FONT_BOLD    = str(_ASSETS / "malgunbd.ttf") if (_ASSETS / "malgunbd.ttf").exists() \
+    else r"C:\Windows\Fonts\malgunbd.ttf"
 
 # 브랜드 컬러
 COLOR_NAVY = (30, 30, 60)
@@ -27,6 +31,8 @@ COLOR_BLUE = (58, 95, 176)
 COLOR_LIGHT = (240, 244, 255)
 COLOR_WHITE = (255, 255, 255)
 COLOR_GRAY = (100, 100, 100)
+COLOR_GREEN = (34, 139, 34)
+COLOR_ORANGE = (200, 100, 0)
 
 
 # ── PDF 클래스 ────────────────────────────────────────────────────────────────
@@ -57,7 +63,6 @@ class ReportPDF(FPDF):
                   f"페이지 {self.page_no()}  |  자동 생성: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                   align="C")
 
-    # 섹션 제목 (진한 배경)
     def section_title(self, title):
         self.set_fill_color(*COLOR_NAVY)
         self.set_text_color(*COLOR_WHITE)
@@ -66,7 +71,6 @@ class ReportPDF(FPDF):
         self.set_text_color(0, 0, 0)
         self.ln(3)
 
-    # 소제목
     def sub_title(self, title):
         self.set_font(self._font, "B", 10)
         self.set_text_color(*COLOR_BLUE)
@@ -76,7 +80,6 @@ class ReportPDF(FPDF):
         self.line(self.l_margin, self.get_y(), self.l_margin + 180, self.get_y())
         self.ln(2)
 
-    # 본문 텍스트
     def body(self, text, indent=0):
         self.set_font(self._font, "", 10)
         if indent:
@@ -84,7 +87,6 @@ class ReportPDF(FPDF):
         self.multi_cell(0, 6, str(text))
         self.ln(1)
 
-    # 강조 박스
     def highlight_box(self, text):
         self.set_fill_color(*COLOR_LIGHT)
         self.set_draw_color(*COLOR_NAVY)
@@ -120,7 +122,7 @@ def generate_charts(data, chart_dir="data/charts"):
 
     if names:
         fig, ax = plt.subplots(figsize=(8, 4))
-        bars = ax.bar(names, avgs, color=["#1e1e3c", "#3a5fb0", "#6b9bd2"])
+        bars = ax.bar(names, avgs, color=["#1e1e3c", "#3a5fb0", "#6b9bd2", "#9bbfde", "#c0d8ee"])
         ax.set_ylabel("평균 조회수 (만)")
         ax.set_title("분야별 평균 조회수 비교")
         for b, v in zip(bars, avgs):
@@ -152,13 +154,107 @@ def generate_charts(data, chart_dir="data/charts"):
     return paths
 
 
+# ── 비용 페이지 ───────────────────────────────────────────────────────────────
+
+def _add_cost_page(pdf, cost_summary):
+    """PDF 마지막에 API 비용 내역 페이지 추가"""
+    pdf.add_page()
+    pdf.section_title("API 사용량 및 비용 내역")
+
+    pdf.set_font(pdf._font, "", 9)
+    pdf.set_text_color(*COLOR_GRAY)
+    pdf.cell(0, 6, "이번 실행에서 사용한 외부 API 비용을 투명하게 공개합니다.",
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(4)
+
+    # ── YouTube API ──
+    pdf.sub_title("YouTube Data API v3")
+    yt = cost_summary.get("youtube", {})
+    quota_used = yt.get("quota_used", 0)
+    quota_limit = yt.get("quota_limit", 10000)
+    quota_pct = yt.get("quota_pct", 0)
+
+    _cost_row(pdf, "사용 쿼터", f"{quota_used:,} 유닛")
+    _cost_row(pdf, "일일 무료 한도", f"{quota_limit:,} 유닛")
+    _cost_row(pdf, "한도 대비 사용률", f"{quota_pct}%")
+    _cost_row(pdf, "비용", "무료 (일일 한도 내 사용)")
+    pdf.ln(4)
+
+    # ── Claude API ──
+    pdf.sub_title("Claude AI API (claude-haiku)")
+    cl = cost_summary.get("claude", {})
+    _cost_row(pdf, "입력 토큰", f"{cl.get('input_tokens', 0):,} tokens")
+    _cost_row(pdf, "출력 토큰", f"{cl.get('output_tokens', 0):,} tokens")
+    _cost_row(pdf, "합계 토큰", f"{cl.get('total_tokens', 0):,} tokens")
+    _cost_row(pdf, "요금 기준",
+              "입력 $0.80 / 출력 $4.00 (100만 토큰당)")
+
+    cost_usd = cl.get("cost_usd", 0)
+    cost_krw = cl.get("cost_krw", 0)
+    pdf.set_font(pdf._font, "B", 10)
+    pdf.set_text_color(*COLOR_BLUE)
+    pdf.cell(55, 7, "  이번 실행 비용", new_x="END", new_y="TOP")
+    pdf.set_font(pdf._font, "", 10)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 7, f"$ {cost_usd:.4f}  (약 {int(cost_krw):,}원)", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    # ── 기타 무료 서비스 ──
+    pdf.sub_title("기타 서비스")
+    _cost_row(pdf, "Gmail API", "무료")
+    _cost_row(pdf, "Notion API", "무료")
+    pdf.ln(6)
+
+    # ── 총 비용 강조 박스 ──
+    total_usd = cost_summary.get("total_usd", 0)
+    total_krw = cost_summary.get("total_krw", 0)
+    pdf.highlight_box(
+        f"이번 실행 총 비용: $ {total_usd:.4f}  (약 {int(total_krw):,}원)\n"
+        f"월 4회 실행 기준 예상 비용: 약 {int(total_krw * 4):,}원"
+    )
+
+    pdf.set_font(pdf._font, "", 8)
+    pdf.set_text_color(*COLOR_GRAY)
+    pdf.multi_cell(0, 5,
+        "* YouTube API 쿼터는 Google Cloud Console에서 확인 가능합니다.\n"
+        "* Claude API 비용은 Anthropic Console에서 확인 가능합니다.\n"
+        "* 환율 기준: 1 USD = 1,350 KRW (참고용)"
+    )
+    pdf.set_text_color(0, 0, 0)
+
+
+def _cost_row(pdf, label, value):
+    pdf.set_font(pdf._font, "B", 10)
+    pdf.cell(55, 7, f"  {label}", new_x="END", new_y="TOP")
+    pdf.set_font(pdf._font, "", 10)
+    pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+
+
 # ── 리포트 생성 ───────────────────────────────────────────────────────────────
 
-def generate_report(data, analysis, output_dir="data/reports"):
+def _topics_to_filename(topics: list) -> str:
+    """주제 리스트 → 파일명 안전 문자열. 예: 수익형브랜드-AI부업"""
+    import re
+    parts = []
+    for t in topics[:3]:  # 최대 3개
+        safe = re.sub(r"[\\/:*?\"<>|\s]", "", t)  # 파일명 금지 문자 + 공백 제거
+        if safe:
+            parts.append(safe)
+    return "-".join(parts) if parts else "트렌드"
+
+
+def generate_report(data, analysis, cost_summary=None, output_dir="data/reports"):
     os.makedirs(output_dir, exist_ok=True)
     week_str = data.get("week", datetime.now().strftime("%Y-W%V"))
     date_str = datetime.now().strftime("%Y%m%d")
-    output_path = f"{output_dir}/trend_report_{date_str}.pdf"
+    topics = data.get("topics", [])
+    topics_slug = _topics_to_filename(topics)
+    output_path = f"{output_dir}/trend_report_{topics_slug}_{date_str}.pdf"
+
+    # 분석 주제 목록 (동적)
+    topics = data.get("topics", [])
+    topics_label = " · ".join(topics) if topics else "트렌드 분석"
 
     charts = generate_charts(data)
 
@@ -171,15 +267,14 @@ def generate_report(data, analysis, output_dir="data/reports"):
     pdf.set_font(pdf._font, "B", 20)
     pdf.set_text_color(*COLOR_NAVY)
     pdf.cell(0, 14, "유튜브 트렌드 주간 리포트", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font(pdf._font, "", 12)
+    pdf.set_font(pdf._font, "", 11)
     pdf.set_text_color(*COLOR_GRAY)
-    pdf.cell(0, 8,
-             f"{week_str}  |  수익형 브랜드 · 콘텐츠 수익화 · 1인 사업 런칭",
+    pdf.cell(0, 8, f"{week_str}  |  {topics_label}",
              align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(6)
 
-    pdf.highlight_box(f"💡 이번 주 핵심 인사이트\n{analysis.get('key_insight', '')}")
+    pdf.highlight_box(f"이번 주 핵심 인사이트\n{analysis.get('key_insight', '')}")
 
     # ── 1. 주간 요약 ──
     pdf.section_title("1. 주간 트렌드 요약")
@@ -228,7 +323,6 @@ def generate_report(data, analysis, output_dir="data/reports"):
 
         channels = nd.get("channels", [])[:5]
         if channels:
-            # 테이블 헤더
             pdf.set_fill_color(*COLOR_NAVY)
             pdf.set_text_color(*COLOR_WHITE)
             pdf.set_font(pdf._font, "B", 9)
@@ -282,15 +376,17 @@ def generate_report(data, analysis, output_dir="data/reports"):
     # ── 6. 콘텐츠 주제 추천 ──
     pdf.section_title("6. 이번 주 콘텐츠 주제 추천")
     for i, rec in enumerate(analysis.get("content_recommendations", []), 1):
-        pdf.highlight_box(
-            f"추천 {i}: {rec.get('title_idea', '')}"
-        )
+        pdf.highlight_box(f"추천 {i}: {rec.get('title_idea', '')}")
         pdf.set_font(pdf._font, "", 10)
         pdf.body(f"분야: {rec.get('niche', '')}  |  포맷: {rec.get('format', '')}", indent=5)
         pdf.body(f"추천 이유: {rec.get('reason', '')}", indent=5)
         if rec.get("hook_suggestion"):
             pdf.body(f"훅 아이디어: {rec['hook_suggestion']}", indent=5)
         pdf.ln(3)
+
+    # ── 7. API 비용 내역 ──
+    if cost_summary:
+        _add_cost_page(pdf, cost_summary)
 
     pdf.output(output_path)
     logger.info(f"PDF 생성 완료: {output_path}")

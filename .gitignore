@@ -39,7 +39,9 @@ credentials.json.json
 token.json
 token_*.json
 
-# 생성된 데이터 파일
-data/reports/
-data/charts/
+# 생성된 데이터 파일 (내용물만 제외, 폴더 구조는 유지)
+data/reports/*
+data/charts/*
 data/channel_cache.json
+!data/reports/.gitkeep
+!data/charts/.gitkeep

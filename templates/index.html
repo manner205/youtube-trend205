@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube 트렌드 리포트</title>
+  <style>
+    :root {
+      --navy: #0f0f2e;
+      --navy2: #1a1a4e;
+      --blue: #3b5bdb;
+      --blue-light: #4c6ef5;
+      --accent: #74c0fc;
+      --bg: #f0f2fc;
+      --card: #ffffff;
+      --border: #e2e6f8;
+      --text: #1c1c3a;
+      --muted: #6c757d;
+      --success: #2f9e44;
+      --error: #e03131;
+      --warn: #f08c00;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── 헤더 ── */
+    header {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 60%, #1e3a8a 100%);
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 24px rgba(15,15,46,.4);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #ff0000, #cc0000);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+    }
+    header h1 { color: white; font-size: 1.1rem; font-weight: 700; flex: 1; }
+    .badge {
+      font-size: 0.72rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      padding: 4px 12px; border-radius: 20px;
+      letter-spacing: .05em;
+    }
+
+    /* ── 레이아웃 ── */
+    .container {
+      max-width: 900px;
+      margin: 32px auto;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── 카드 ── */
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 2px 20px rgba(15,15,46,.07), 0 0 0 1px var(--border);
+      transition: box-shadow .2s;
+    }
+    .card:hover { box-shadow: 0 4px 32px rgba(15,15,46,.11), 0 0 0 1px var(--border); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .card-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .card-icon.blue  { background: #dbe4ff; }
+    .card-icon.green { background: #d3f9d8; }
+    .card-icon.orange{ background: #fff4e6; }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .card-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    /* ── 주제 입력 ── */
+    .topic-input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .topic-input-row input {
+      flex: 1;
+      padding: 11px 16px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.93rem;
+      outline: none;
+      color: var(--text);
+      transition: border-color .2s, box-shadow .2s;
+      background: #fafbff;
+    }
+    .topic-input-row input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 4px rgba(59,91,219,.1);
+      background: white;
+    }
+    .btn-add {
+      padding: 11px 22px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all .2s;
+      box-shadow: 0 2px 8px rgba(59,91,219,.3);
+    }
+    .btn-add:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(59,91,219,.4); }
+    .btn-add:active { transform: translateY(0); }
+
+    /* ── 주제 태그 ── */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+      min-height: 34px;
+    }
+    .tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #dbe4ff, #eef2ff);
+      border: 1px solid #bac8ff;
+      color: #364fc7;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:scale(.9); } to { opacity:1; transform:scale(1); } }
+    .tag button {
+      background: none; border: none; cursor: pointer;
+      color: #748ffc; font-size: 1rem; line-height: 1; padding: 0;
+      transition: color .15s;
+    }
+    .tag button:hover { color: var(--error); }
+
+    /* ── 빠른 선택 ── */
+    .quick-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 8px;
+    }
+    .quick-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      padding: 5px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      background: white;
+      font-size: 0.82rem;
+      cursor: pointer;
+      color: var(--blue);
+      font-weight: 500;
+      transition: all .15s;
+    }
+    .chip:hover {
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      border-color: transparent;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(59,91,219,.25);
+    }
+
+    /* ── 2컬럼 레이아웃 ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ── 토글 스위치 ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .toggle-label-group { display: flex; flex-direction: column; gap: 2px; }
+    .toggle-label { font-size: 0.95rem; font-weight: 600; }
+    .toggle-desc  { font-size: 0.77rem; color: var(--muted); }
+
+    .switch { position: relative; width: 52px; height: 28px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: #dee2e6;
+      border-radius: 28px;
+      cursor: pointer;
+      transition: .3s;
+    }
+    .slider:before {
+      content: '';
+      position: absolute;
+      width: 22px; height: 22px;
+      left: 3px; bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: .3s;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    input:checked + .slider { background: linear-gradient(135deg, var(--blue), var(--blue-light)); }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+    /* ── 스케줄 상세 ── */
+    #schedule-detail {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: none;
+    }
+    #schedule-detail.visible { display: block; }
+
+    .schedule-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px 16px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .schedule-grid label { font-size: 0.85rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
+
+    /* 요일 체크박스 */
+    .day-checks { display: flex; gap: 6px; flex-wrap: wrap; }
+    .day-check { display: none; }
+    .day-check + label {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .15s;
+      font-weight: 500;
+    }
+    .day-check:checked + label {
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 2px 8px rgba(59,91,219,.3);
+    }
+
+    .schedule-select, .time-input {
+      padding: 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      outline: none;
+      background: #fafbff;
+      color: var(--text);
+      transition: border-color .2s;
+    }
+    .schedule-select:focus, .time-input:focus { border-color: var(--blue); }
+    .time-input { width: 120px; }
+
+    .next-run-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--blue);
+      background: #dbe4ff;
+      padding: 6px 14px;
+      border-radius: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-save {
+      padding: 9px 22px;
+      background: white;
+      color: var(--blue);
+      border: 1.5px solid var(--blue);
+      border-radius: 10px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all .2s;
+    }
+    .btn-save:hover {
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 2px 12px rgba(59,91,219,.3);
+    }
+
+    /* ── Gmail 발송 옵션 (run 카드 내) ── */
+    .run-options {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: #f8f9ff;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    .run-opt-label { font-size: 0.88rem; font-weight: 500; color: var(--text); }
+    .run-opt-desc  { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── 실행 버튼 ── */
+    .btn-run {
+      width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 50%, #1e3a8a 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all .25s;
+      letter-spacing: .04em;
+      box-shadow: 0 4px 20px rgba(15,15,46,.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-run::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.08), transparent);
+    }
+    .btn-run:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(15,15,46,.4);
+    }
+    .btn-run:active:not(:disabled) { transform: translateY(0); }
+    .btn-run:disabled {
+      background: linear-gradient(135deg, #aaa, #999);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* ── 진행 현황 ── */
+    #progress-section { display: none; }
+    #progress-section.visible { display: block; }
+
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: #f8f9ff;
+      border: 1.5px solid var(--border);
+      transition: all .3s ease;
+    }
+    .step.running {
+      background: linear-gradient(135deg, #e7f0ff, #dbe4ff);
+      border-color: #74c0fc;
+      box-shadow: 0 2px 12px rgba(59,91,219,.12);
+    }
+    .step.done {
+      background: linear-gradient(135deg, #ebfbee, #d3f9d8);
+      border-color: #8ce99a;
+    }
+    .step.error {
+      background: linear-gradient(135deg, #fff5f5, #ffe3e3);
+      border-color: #ffa8a8;
+    }
+    .step.skipped { opacity: .55; }
+
+    .step-icon-wrap {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      background: white;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .step.running .step-icon-wrap { animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+    .step-info { flex: 1; }
+    .step-name { font-size: 0.9rem; font-weight: 700; }
+    .step-msg  { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+    .step.running .step-msg { color: var(--blue); }
+    .step.done .step-msg    { color: var(--success); }
+    .step.error .step-msg   { color: var(--error); }
+
+    .step-status-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .step .step-status-badge        { background: var(--border); color: var(--muted); }
+    .step.running .step-status-badge{ background: #dbe4ff; color: var(--blue); }
+    .step.done .step-status-badge   { background: #d3f9d8; color: var(--success); }
+    .step.error .step-status-badge  { background: #ffe3e3; color: var(--error); }
+    .step.skipped .step-status-badge{ background: var(--border); color: var(--muted); }
+
+    /* ── 리포트 목록 ── */
+    .report-list { display: flex; flex-direction: column; gap: 8px; }
+    .report-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: #fafbff;
+      transition: all .2s;
+    }
+    .report-item:hover { border-color: var(--blue); background: #f0f4ff; }
+    .report-file-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+    }
+    .report-name { font-size: 0.85rem; font-weight: 500; color: var(--text); flex: 1; }
+    .report-date { font-size: 0.75rem; color: var(--muted); }
+    .btn-dl {
+      padding: 7px 18px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all .2s;
+      box-shadow: 0 2px 8px rgba(59,91,219,.2);
+    }
+    .btn-dl:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(59,91,219,.35); }
+    .empty {
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-align: center;
+      padding: 24px 0;
+    }
+
+    /* ── 토스트 ── */
+    #toast {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      background: var(--navy);
+      color: white;
+      padding: 14px 22px;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: all .3s;
+      z-index: 999;
+      box-shadow: 0 8px 32px rgba(15,15,46,.4);
+      transform: translateY(12px);
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── 구분선 ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 0 20px;
+    }
+
+    /* ── 스크롤바 ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #c5cae9; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-icon">▶</div>
+  <h1>YouTube 트렌드 리포트</h1>
+  <span class="badge">v2.0</span>
+</header>
+
+<div class="container">
+
+  <!-- ── 주제 입력 카드 ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon blue">🔍</div>
+      <div>
+        <div class="card-title">분석 주제 설정</div>
+      </div>
+      <span class="card-sub" id="topic-count">0 / 5</span>
+    </div>
+
+    <div class="topic-input-row">
+      <input id="topic-input" type="text" placeholder="분석할 주제를 입력하세요 (예: AI 부업, 퍼스널 브랜딩)" />
+      <button class="btn-add" onclick="addTopic()">+ 추가</button>
+    </div>
+
+    <div class="tags" id="tags"></div>
+
+    <div class="quick-label">빠른 선택</div>
+    <div class="quick-chips">
+      <span class="chip" onclick="addQuick('수익형 브랜드')">수익형 브랜드</span>
+      <span class="chip" onclick="addQuick('콘텐츠 수익화')">콘텐츠 수익화</span>
+      <span class="chip" onclick="addQuick('1인 사업 런칭')">1인 사업 런칭</span>
+      <span class="chip" onclick="addQuick('AI 부업')">AI 부업</span>
+      <span class="chip" onclick="addQuick('유튜브 채널 성장')">유튜브 채널 성장</span>
+      <span class="chip" onclick="addQuick('디지털 노마드')">디지털 노마드</span>
+      <span class="chip" onclick="addQuick('퍼스널 브랜딩')">퍼스널 브랜딩</span>
+      <span class="chip" onclick="addQuick('온라인 강의 판매')">온라인 강의 판매</span>
+    </div>
+  </div>
+
+  <!-- ── 실행 카드 ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon blue">▶</div>
+      <div class="card-title">리포트 생성</div>
+    </div>
+
+    <!-- Gmail 발송 여부 (스케줄과 독립) -->
+    <div class="run-options">
+      <div>
+        <div class="run-opt-label">📧 Gmail 발송</div>
+        <div class="run-opt-desc">지금 실행 시 리포트를 이메일로 발송합니다</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="send-email-toggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <button class="btn-run" id="btn-run" onclick="runReport()">
+      ▶&nbsp;&nbsp;지금 리포트 생성
+    </button>
+  </div>
+
+  <!-- ── 스케줄 카드 ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon orange">📅</div>
+      <div class="card-title">Gmail 자동 발송 스케줄</div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-label-group">
+        <span class="toggle-label">자동 발송 활성화</span>
+        <span class="toggle-desc">설정한 요일과 시간에 자동으로 분석 후 발송합니다</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="schedule-toggle" onchange="toggleSchedule()" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div id="schedule-detail">
+      <div class="schedule-grid">
+        <label>요일</label>
+        <div class="day-checks">
+          <input class="day-check" type="checkbox" id="d-mon" value="mon"><label for="d-mon">월</label>
+          <input class="day-check" type="checkbox" id="d-tue" value="tue"><label for="d-tue">화</label>
+          <input class="day-check" type="checkbox" id="d-wed" value="wed"><label for="d-wed">수</label>
+          <input class="day-check" type="checkbox" id="d-thu" value="thu"><label for="d-thu">목</label>
+          <input class="day-check" type="checkbox" id="d-fri" value="fri"><label for="d-fri">금</label>
+          <input class="day-check" type="checkbox" id="d-sat" value="sat"><label for="d-sat">토</label>
+          <input class="day-check" type="checkbox" id="d-sun" value="sun"><label for="d-sun">일</label>
+        </div>
+
+        <label>발송 시간</label>
+        <div style="display:flex;gap:12px;align-items:center">
+          <input class="time-input" type="time" id="schedule-time" value="20:00" />
+          <select class="schedule-select" id="schedule-freq">
+            <option value="weekly">매주</option>
+            <option value="biweekly">격주</option>
+            <option value="monthly">매월</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="next-run-info" style="display:none" class="next-run-badge">
+        <span>🕐</span><span id="next-run-text"></span>
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="btn-save" onclick="saveSchedule()">💾 스케줄 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 진행 현황 ── -->
+  <div class="card" id="progress-section">
+    <div class="card-header">
+      <div class="card-icon blue">⚡</div>
+      <div class="card-title">실행 현황</div>
+      <span class="card-sub" id="elapsed-time"></span>
+    </div>
+    <div class="step-list">
+      <div class="step" id="step-youtube">
+        <div class="step-icon-wrap">📺</div>
+        <div class="step-info">
+          <div class="step-name">YouTube 데이터 수집</div>
+          <div class="step-msg" id="msg-youtube">대기 중...</div>
+        </div>
+        <span class="step-status-badge" id="badge-youtube">대기</span>
+      </div>
+      <div class="step" id="step-claude">
+        <div class="step-icon-wrap">🤖</div>
+        <div class="step-info">
+          <div class="step-name">Claude AI 분석</div>
+          <div class="step-msg" id="msg-claude">대기 중...</div>
+        </div>
+        <span class="step-status-badge" id="badge-claude">대기</span>
+      </div>
+      <div class="step" id="step-pdf">
+        <div class="step-icon-wrap">📄</div>
+        <div class="step-info">
+          <div class="step-name">PDF 리포트 생성</div>
+          <div class="step-msg" id="msg-pdf">대기 중...</div>
+        </div>
+        <span class="step-status-badge" id="badge-pdf">대기</span>
+      </div>
+      <div class="step" id="step-gmail">
+        <div class="step-icon-wrap">📧</div>
+        <div class="step-info">
+          <div class="step-name">Gmail 발송</div>
+          <div class="step-msg" id="msg-gmail">대기 중...</div>
+        </div>
+        <span class="step-status-badge" id="badge-gmail">대기</span>
+      </div>
+      <div class="step" id="step-notion">
+        <div class="step-icon-wrap">📝</div>
+        <div class="step-info">
+          <div class="step-name">Notion 저장</div>
+          <div class="step-msg" id="msg-notion">대기 중...</div>
+        </div>
+        <span class="step-status-badge" id="badge-notion">대기</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 최근 리포트 ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon orange">📁</div>
+      <div class="card-title">최근 리포트</div>
+      <span class="card-sub" id="report-count"></span>
+    </div>
+    <div class="report-list" id="report-list">
+      <div class="empty">리포트를 생성하면 여기에 표시돼요.</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── 주제 관리 ──────────────────────────────────────────────────────────────
+  let topics = [];
+
+  function renderTags() {
+    const container = document.getElementById('tags');
+    document.getElementById('topic-count').textContent = `${topics.length} / 5`;
+    container.innerHTML = topics.map((t, i) => `
+      <div class="tag">
+        ${t}
+        <button onclick="removeTopic(${i})" title="삭제">×</button>
+      </div>
+    `).join('');
+  }
+
+  function addTopic() {
+    const input = document.getElementById('topic-input');
+    const val = input.value.trim();
+    if (!val) return;
+    if (topics.includes(val)) { toast('이미 추가된 주제예요.'); return; }
+    if (topics.length >= 5) { toast('주제는 최대 5개까지 추가할 수 있어요.'); return; }
+    topics.push(val);
+    input.value = '';
+    renderTags();
+  }
+
+  function removeTopic(i) {
+    topics.splice(i, 1);
+    renderTags();
+  }
+
+  function addQuick(t) {
+    if (topics.includes(t)) { toast('이미 추가된 주제예요.'); return; }
+    if (topics.length >= 5) { toast('주제는 최대 5개까지 추가할 수 있어요.'); return; }
+    topics.push(t);
+    renderTags();
+  }
+
+  document.getElementById('topic-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTopic();
+  });
+
+  // ── 스케줄 ─────────────────────────────────────────────────────────────────
+  function toggleSchedule() {
+    const on = document.getElementById('schedule-toggle').checked;
+    document.getElementById('schedule-detail').classList.toggle('visible', on);
+  }
+
+  async function loadSchedule() {
+    const res = await fetch('/api/schedule');
+    const cfg = await res.json();
+
+    document.getElementById('schedule-toggle').checked = cfg.enabled;
+    document.getElementById('schedule-detail').classList.toggle('visible', cfg.enabled);
+    document.getElementById('schedule-time').value = cfg.time || '20:00';
+    document.getElementById('schedule-freq').value = cfg.frequency || 'weekly';
+
+    ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => {
+      document.getElementById('d-' + d).checked = (cfg.days || []).includes(d);
+    });
+
+    if (cfg.next_run) {
+      document.getElementById('next-run-text').textContent = '다음 발송 예정: ' + cfg.next_run;
+      document.getElementById('next-run-info').style.display = 'inline-flex';
+    }
+  }
+
+  async function saveSchedule() {
+    const days = ['mon','tue','wed','thu','fri','sat','sun']
+      .filter(d => document.getElementById('d-' + d).checked);
+
+    if (document.getElementById('schedule-toggle').checked && days.length === 0) {
+      toast('요일을 최소 1개 선택해주세요.'); return;
+    }
+
+    const config = {
+      enabled: document.getElementById('schedule-toggle').checked,
+      days,
+      time: document.getElementById('schedule-time').value,
+      frequency: document.getElementById('schedule-freq').value,
+      topics: topics.length > 0 ? topics : ['수익형 브랜드', '콘텐츠 수익화', '1인 사업 런칭'],
+    };
+
+    const res = await fetch('/api/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    const data = await res.json();
+
+    if (data.next_run) {
+      document.getElementById('next-run-text').textContent = '다음 발송 예정: ' + data.next_run;
+      document.getElementById('next-run-info').style.display = 'inline-flex';
+    }
+    toast('✅ 스케줄이 저장됐어요.');
+  }
+
+  // ── 리포트 실행 ────────────────────────────────────────────────────────────
+  let _startTime = null;
+  let _timerInterval = null;
+
+  async function runReport() {
+    if (topics.length === 0) { toast('주제를 최소 1개 추가해주세요.'); return; }
+
+    const btn = document.getElementById('btn-run');
+    btn.disabled = true;
+    btn.textContent = '⏳  실행 중...';
+
+    document.getElementById('progress-section').classList.add('visible');
+    ['youtube','claude','pdf','gmail','notion'].forEach(resetStep);
+
+    _startTime = Date.now();
+    _timerInterval = setInterval(() => {
+      const s = Math.floor((Date.now() - _startTime) / 1000);
+      document.getElementById('elapsed-time').textContent = `${s}초 경과`;
+    }, 1000);
+
+    const sendEmail = document.getElementById('send-email-toggle').checked;
+
+    const res = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topics, send_email: sendEmail }),
+    });
+    const { run_id, error } = await res.json();
+
+    if (error) {
+      toast('오류: ' + error);
+      btn.disabled = false;
+      btn.textContent = '▶  지금 리포트 생성';
+      clearInterval(_timerInterval);
+      return;
+    }
+
+    const es = new EventSource('/api/progress/' + run_id);
+    es.onmessage = e => {
+      const data = JSON.parse(e.data);
+      if (data.done || data.ping) {
+        if (data.done) {
+          es.close();
+          clearInterval(_timerInterval);
+          btn.disabled = false;
+          btn.textContent = '▶  지금 리포트 생성';
+          toast('🎉 리포트 생성 완료!');
+          loadReports();
+        }
+        return;
+      }
+      updateStep(data.step, data.status, data.message || '');
+    };
+    es.onerror = () => {
+      es.close();
+      clearInterval(_timerInterval);
+      btn.disabled = false;
+      btn.textContent = '▶  지금 리포트 생성';
+    };
+  }
+
+  // ── 진행 단계 UI ───────────────────────────────────────────────────────────
+  const STEP_ICONS = { pending:'⏸', running:'⚡', done:'✓', error:'✕', skipped:'→' };
+  const STEP_LABELS = { pending:'대기', running:'실행 중', done:'완료', error:'오류', skipped:'건너뜀' };
+
+  function resetStep(step) {
+    const el = document.getElementById('step-' + step);
+    el.className = 'step';
+    el.querySelector('.step-icon-wrap').style.animation = '';
+    document.getElementById('msg-' + step).textContent = '대기 중...';
+    document.getElementById('badge-' + step).textContent = '대기';
+  }
+
+  function updateStep(step, status, message) {
+    const el = document.getElementById('step-' + step);
+    if (!el) return;
+    el.className = 'step ' + status;
+    document.getElementById('badge-' + step).textContent = STEP_LABELS[status] || status;
+    if (message) document.getElementById('msg-' + step).textContent = message;
+  }
+
+  // ── 리포트 목록 ────────────────────────────────────────────────────────────
+  async function loadReports() {
+    const res = await fetch('/api/reports');
+    const files = await res.json();
+    const container = document.getElementById('report-list');
+
+    document.getElementById('report-count').textContent = files.length ? `${files.length}개` : '';
+
+    if (!files.length) {
+      container.innerHTML = '<div class="empty">리포트를 생성하면 여기에 표시돼요.</div>';
+      return;
+    }
+
+    container.innerHTML = files.slice(0, 10).map(f => {
+      const parts = f.replace('trend_report_', '').replace('.pdf', '').split('_');
+      const dateStr = parts[parts.length - 1];
+      const topicStr = parts.slice(0, -1).join(' / ');
+      return `
+        <div class="report-item">
+          <div class="report-file-icon">📄</div>
+          <div style="flex:1;min-width:0">
+            <div class="report-name">${topicStr || f}</div>
+            <div class="report-date">${dateStr ? dateStr.slice(0,4)+'.'+dateStr.slice(4,6)+'.'+dateStr.slice(6) : ''}</div>
+          </div>
+          <a class="btn-dl" href="/api/reports/${f}" download>다운로드</a>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ── 토스트 ─────────────────────────────────────────────────────────────────
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  // ── 초기화 ─────────────────────────────────────────────────────────────────
+  renderTags();
+  loadSchedule();
+  loadReports();
+</script>
+</body>
+</html>
