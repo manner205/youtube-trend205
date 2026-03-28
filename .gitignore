@@ -1,0 +1,45 @@
+# 환경변수 파일 - API 키 등 민감한 정보가 들어있어. 절대 올리지 마.
+.env
+.env.local
+.env.*.local
+
+# 파이썬 캐시
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# macOS 시스템 파일
+.DS_Store
+
+# 에디터 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 로그 파일
+*.log
+logs/
+
+# 빌드 결과물
+dist/
+build/
+*.egg-info/
+
+# Google OAuth 인증 파일 - 비밀키 포함, 절대 올리지 마
+credentials.json
+credentials.json.json
+token.json
+token_*.json
+
+# 생성된 데이터 파일
+data/reports/
+data/charts/
+data/channel_cache.json
