@@ -491,6 +491,57 @@
     }
     #toast.show { opacity: 1; transform: translateY(0); }
 
+    /* ── 캐시 관리 ── */
+    .cache-status-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: #f8f9ff;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+    }
+    .cache-status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cache-status-dot.fresh  { background: var(--success); }
+    .cache-status-dot.old    { background: var(--warn); }
+    .cache-status-dot.none   { background: var(--muted); }
+    .cache-status-info { flex: 1; }
+    .cache-status-label { font-weight: 600; color: var(--text); }
+    .cache-status-desc  { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+    .btn-cache-clear {
+      padding: 8px 18px;
+      background: white;
+      color: var(--error);
+      border: 1.5px solid var(--error);
+      border-radius: 10px;
+      font-size: 0.84rem;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all .2s;
+      flex-shrink: 0;
+    }
+    .btn-cache-clear:hover {
+      background: var(--error);
+      color: white;
+      box-shadow: 0 2px 10px rgba(224,49,49,.3);
+    }
+    .btn-cache-clear:disabled { opacity: .5; cursor: not-allowed; }
+    .cache-info-box {
+      padding: 12px 16px;
+      background: #fff9e6;
+      border: 1.5px solid #ffd43b;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      color: #7a4f00;
+      line-height: 1.6;
+    }
+
     /* ── 구분선 ── */
     .divider {
       height: 1px;
@@ -617,6 +668,33 @@
       <div style="margin-top:16px">
         <button class="btn-save" onclick="saveSchedule()">💾 스케줄 저장</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── 채널 캐시 관리 ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:#fff0f6;">🗂️</div>
+      <div>
+        <div class="card-title">채널 캐시 관리</div>
+      </div>
+    </div>
+
+    <div class="cache-info-box" style="margin-bottom:16px">
+      <strong>채널 캐시란?</strong><br>
+      분야별 탑 채널 목록을 YouTube API로 검색한 결과를 저장해 두는 파일입니다.<br>
+      캐시가 있으면 매주 리포트 실행 시 재검색 없이 저장된 채널만 사용하므로 <strong>API 사용량을 절약</strong>합니다.<br>
+      단, 캐시가 오래되면 <strong>새로 성장한 채널이나 처음 누락된 채널이 리포트에 반영되지 않을 수 있습니다.</strong><br>
+      캐시는 <strong>40일이 지나면 자동으로 초기화</strong>되며, 아래 버튼으로 즉시 수동 삭제할 수 있습니다.
+    </div>
+
+    <div class="cache-status-box">
+      <div class="cache-status-dot none" id="cache-dot"></div>
+      <div class="cache-status-info">
+        <div class="cache-status-label" id="cache-label">상태 확인 중...</div>
+        <div class="cache-status-desc" id="cache-desc"></div>
+      </div>
+      <button class="btn-cache-clear" id="btn-cache-clear" onclick="clearCache()">🗑 캐시 삭제</button>
     </div>
   </div>
 
@@ -903,10 +981,54 @@
     setTimeout(() => el.classList.remove('show'), 3000);
   }
 
+  // ── 채널 캐시 관리 ────────────────────────────────────────────────────────
+  async function loadCacheStatus() {
+    const res = await fetch('/api/cache/status');
+    const data = await res.json();
+    const dot   = document.getElementById('cache-dot');
+    const label = document.getElementById('cache-label');
+    const desc  = document.getElementById('cache-desc');
+
+    if (!data.exists) {
+      dot.className   = 'cache-status-dot none';
+      label.textContent = '캐시 없음';
+      desc.textContent  = '다음 리포트 생성 시 채널을 새로 검색합니다.';
+      return;
+    }
+
+    const savedAt = new Date(data.saved_at);
+    const ageDays = Math.floor((Date.now() - savedAt) / 86400000);
+    const dateStr = savedAt.toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric' });
+
+    if (ageDays >= 40) {
+      dot.className   = 'cache-status-dot old';
+      label.textContent = `캐시 만료 (${ageDays}일 경과)`;
+      desc.textContent  = `저장일: ${dateStr} · 분야 ${data.niche_count}개 · 다음 실행 시 자동 재검색됩니다.`;
+    } else {
+      dot.className   = 'cache-status-dot fresh';
+      label.textContent = `캐시 정상 (${ageDays}일 경과 / 만료까지 ${40 - ageDays}일)`;
+      desc.textContent  = `저장일: ${dateStr} · 분야 ${data.niche_count}개`;
+    }
+  }
+
+  async function clearCache() {
+    if (!confirm('채널 캐시를 삭제하면 다음 리포트 생성 시 YouTube API로 채널을 새로 검색합니다.\n계속할까요?')) return;
+    const btn = document.getElementById('btn-cache-clear');
+    btn.disabled = true;
+    btn.textContent = '삭제 중...';
+    const res  = await fetch('/api/cache/clear', { method: 'POST' });
+    const data = await res.json();
+    toast('🗑 ' + data.message);
+    await loadCacheStatus();
+    btn.disabled = false;
+    btn.textContent = '🗑 캐시 삭제';
+  }
+
   // ── 초기화 ─────────────────────────────────────────────────────────────────
   renderTags();
   loadSchedule();
   loadReports();
+  loadCacheStatus();
 </script>
 </body>
 </html>

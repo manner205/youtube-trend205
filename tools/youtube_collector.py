@@ -188,18 +188,30 @@ def _is_shorts(duration, title):
 
 # ── 채널 캐시 ─────────────────────────────────────────────────────────────────
 
+CACHE_EXPIRE_DAYS = 40
+
+
 def load_channel_cache():
     os.makedirs("data", exist_ok=True)
     if os.path.exists(CHANNEL_CACHE_FILE):
         with open(CHANNEL_CACHE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            cache = json.load(f)
+        saved_at_str = cache.get("_saved_at")
+        if saved_at_str:
+            saved_at = datetime.fromisoformat(saved_at_str)
+            age_days = (datetime.now() - saved_at).days
+            if age_days >= CACHE_EXPIRE_DAYS:
+                logger.info(f"채널 캐시가 {age_days}일 경과 (만료 기준: {CACHE_EXPIRE_DAYS}일) → 캐시 초기화 후 재검색")
+                return {}
+        return {k: v for k, v in cache.items() if not k.startswith("_")}
     return {}
 
 
 def save_channel_cache(cache):
     os.makedirs("data", exist_ok=True)
+    data = {"_saved_at": datetime.now().isoformat(), **cache}
     with open(CHANNEL_CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 # ── 메인 수집 함수 ────────────────────────────────────────────────────────────

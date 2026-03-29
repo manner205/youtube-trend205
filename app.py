@@ -174,6 +174,32 @@ async def save_schedule(config: ScheduleConfig):
     return {"ok": True, "next_run": next_run}
 
 
+# ── 채널 캐시 API ─────────────────────────────────────────────────────────────
+
+@app.get("/api/cache/status")
+async def cache_status():
+    """채널 캐시 상태 조회"""
+    cache_file = "data/channel_cache.json"
+    if not os.path.exists(cache_file):
+        return {"exists": False, "saved_at": None, "niche_count": 0}
+    with open(cache_file, "r", encoding="utf-8") as f:
+        cache = json.load(f)
+    saved_at = cache.get("_saved_at")
+    niche_count = len([k for k in cache if not k.startswith("_")])
+    return {"exists": True, "saved_at": saved_at, "niche_count": niche_count}
+
+
+@app.post("/api/cache/clear")
+async def clear_cache():
+    """채널 캐시 삭제 — 다음 실행 시 채널을 새로 검색"""
+    cache_file = "data/channel_cache.json"
+    if os.path.exists(cache_file):
+        os.remove(cache_file)
+        logger.info("채널 캐시 수동 삭제")
+        return {"ok": True, "message": "캐시가 삭제됐습니다. 다음 리포트 생성 시 채널을 새로 검색합니다."}
+    return {"ok": True, "message": "삭제할 캐시가 없습니다."}
+
+
 # ── 리포트 파일 API ───────────────────────────────────────────────────────────
 
 @app.get("/api/reports")
